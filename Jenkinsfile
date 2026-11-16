@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -13,14 +14,31 @@ pipeline {
                 sh 'npm run build'
             }
         }
+
+        stage('Deploy to CloudResQ EC2') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'cloudresq-ssh',
+                        keyFileVariable: 'SSH_KEY'
+                    )
+                ]) {
+                    sh '''
+                        mkdir -p ~/.ssh
+                        ssh-keyscan -H 172.31.8.74 >> ~/.ssh/known_hosts
+                        scp -i "$SSH_KEY" -r dist/. ubuntu@172.31.8.74:/var/www/html/
+                    '''
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'CloudResQ frontend build completed successfully!'
+            echo 'CloudResQ build and deployment completed successfully!'
         }
         failure {
-            echo 'CloudResQ frontend build failed!'
+            echo 'CloudResQ pipeline failed!'
         }
     }
 }
