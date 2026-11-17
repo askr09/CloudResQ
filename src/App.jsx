@@ -14,6 +14,11 @@ const [dockerInfo, setDockerInfo] = useState(null);
 const [dockerLoading, setDockerLoading] = useState(false);
 const [dockerError, setDockerError] = useState("");
 
+  // Security information
+  const [securityInfo, setSecurityInfo] = useState(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState("");
+
   // Loading states
   const [loading, setLoading] = useState(false);
   const [vpcLoading, setVpcLoading] = useState(false);
@@ -176,6 +181,27 @@ const [dockerError, setDockerError] = useState("");
     }
   }, []);
 
+  // Fetch live AWS security information
+  const fetchSecurity = useCallback(async () => {
+    setSecurityLoading(true);
+    setSecurityError("");
+
+    try {
+      const response = await fetch("/api/security");
+
+      if (!response.ok) {
+        throw new Error("Unable to retrieve AWS security information.");
+      }
+
+      const data = await response.json();
+      setSecurityInfo(data);
+    } catch (err) {
+      setSecurityError(err.message);
+    } finally {
+      setSecurityLoading(false);
+    }
+  }, []);
+
   // Load information when a module opens
   useEffect(() => {
     if (activePage === "Infrastructure") {
@@ -188,6 +214,10 @@ const [dockerError, setDockerError] = useState("");
     if (activePage === "Deployment") {
       fetchDocker();
     }
+
+    if (activePage === "Security") {
+      fetchSecurity();
+    }
   }, [
     activePage,
     fetchInstances,
@@ -195,6 +225,7 @@ const [dockerError, setDockerError] = useState("");
     fetchTerraform,
     fetchCloudFormation,
     fetchDocker,
+    fetchSecurity,
   ]);
 
 
@@ -843,21 +874,135 @@ const [dockerError, setDockerError] = useState("");
     <section className="module-content">
       <h2>Jenkins CI/CD Pipeline</h2>
       <p>
-        Jenkins automation and GitHub webhook integration
-        will be implemented in the next phase.
+        Jenkins CI/CD pipeline is configured to retrieve the
+        CloudResQ project from GitHub, install dependencies,
+        build the React application and deploy it to the EC2 server.
       </p>
       <span className="connection-status">
-        Pending Implementation
+        Pipeline Configured
       </span>
+      <p><strong>Latest verified build:</strong> Build #10 — SUCCESS</p>
+      <p><strong>Jenkins URL:</strong>{" "}
+        <a href="http://13.233.126.58:8080" target="_blank" rel="noreferrer">
+          Open Jenkins Dashboard
+        </a>
+      </p>
     </section>
   </>
 )}
 
 
+        {/* Security Module */}
+        {activePage === "Security" && (
+          <>
+            <h2 className="section-title">AWS Security Overview</h2>
+
+            <section className="module-content infrastructure-info">
+              <h2>IAM and Security Group Information</h2>
+              <p>
+                Live security configuration retrieved from the CloudResQ
+                EC2 instance using AWS IAM and EC2 APIs.
+              </p>
+
+              <button onClick={fetchSecurity} disabled={securityLoading}>
+                {securityLoading ? "Refreshing..." : "↻ Refresh Security"}
+              </button>
+
+              {securityError && (
+                <p className="notice">Error: {securityError}</p>
+              )}
+
+              {securityLoading && <p>Fetching security information...</p>}
+
+              {!securityLoading && securityInfo && (
+                <>
+                  <div className="card-grid">
+                    <div className="module-card">
+                      <h3>Connection Status</h3>
+                      <h2>{securityInfo.status}</h2>
+                    </div>
+
+                    <div className="module-card">
+                      <h3>IAM Instance Profile</h3>
+                      <p>{securityInfo.iam_instance_profile || "Not attached"}</p>
+                    </div>
+
+                    <div className="module-card">
+                      <h3>Instance ID</h3>
+                      <p>{securityInfo.instance_id || "Unavailable"}</p>
+                    </div>
+
+                    <div className="module-card">
+                      <h3>Security Groups</h3>
+                      <h2>{securityInfo.total_security_groups}</h2>
+                    </div>
+                  </div>
+
+                  <h2>Security Group Details</h2>
+
+                  {securityInfo.security_groups?.map((group) => (
+                    <div className="module-card" key={group.group_id}>
+                      <h3>{group.group_name}</h3>
+                      <p><strong>Group ID:</strong> {group.group_id}</p>
+                      <p><strong>Description:</strong> {group.description}</p>
+                      <p><strong>Total Inbound Rules:</strong> {group.total_inbound_rules}</p>
+
+                      <h3>Inbound Rules</h3>
+
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          textAlign: "left",
+                          marginTop: "12px"
+                        }}>
+                          <thead>
+                            <tr>
+                              <th>Protocol</th>
+                              <th>Port</th>
+                              <th>IPv4 Sources</th>
+                              <th>Security Group Sources</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.inbound_rules?.map((rule, index) => (
+                              <tr key={index}>
+                                <td>{rule.protocol}</td>
+                                <td>
+                                  {rule.from_port === rule.to_port
+                                    ? rule.from_port
+                                    : `${rule.from_port} - ${rule.to_port}`}
+                                </td>
+                                <td>{rule.ipv4_sources?.join(", ") || "—"}</td>
+                                <td>{rule.security_group_sources?.join(", ") || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+
+                  <p>
+                    <strong>Note:</strong> This page displays IAM and
+                    security group configuration. It does not perform
+                    automated vulnerability scanning.
+                  </p>
+                </>
+              )}
+
+              {!securityLoading && !securityError && !securityInfo && (
+                <p>Security information is not available yet.</p>
+              )}
+            </section>
+          </>
+        )}
+
         {/* Other Modules */}
         {activePage !== "Dashboard" &&
         activePage !== "Infrastructure" &&
-        activePage !== "Deployment" && (
+        activePage !== "Deployment" &&
+        activePage !== "Security" && (
             <section className="module-content">
               <h2>{activePage} Module</h2>
               <p>{descriptions[activePage]}</p>
